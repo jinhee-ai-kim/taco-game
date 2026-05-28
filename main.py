@@ -38,6 +38,7 @@ class Player(pygame.sprite.Sprite):
         self.speed = 7
         self.hurt_timer = 0
         self.eat_timer = 0
+        self.touch_x = None  # None = no touch, int = active touch X coord
 
     def update(self):
         keys = pygame.key.get_pressed()
@@ -45,6 +46,11 @@ class Player(pygame.sprite.Sprite):
             self.rect.x -= self.speed
         if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
             self.rect.x += self.speed
+
+        if self.touch_x is not None:
+            new_cx = max(self.width // 2, min(SCREEN_WIDTH - self.width // 2, self.touch_x))
+            self.rect.centerx = new_cx
+
         if self.hurt_timer > 0:
             self.hurt_timer -= 1
         if self.eat_timer > 0:
@@ -169,18 +175,21 @@ def draw_start_screen(surface, font_large, font_mid, font_small, bg_image):
     surface.blit(overlay, (0, 0))
 
     title_text = font_large.render("Tacoman Game", True, YELLOW)
-    surface.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 180))
+    surface.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 170))
 
     btn_w, btn_h = 260, 60
     btn_x = SCREEN_WIDTH // 2 - btn_w // 2
-    btn_y = 310
+    btn_y = 300
     pygame.draw.rect(surface, GREEN, (btn_x, btn_y, btn_w, btn_h), border_radius=12)
     pygame.draw.rect(surface, WHITE, (btn_x, btn_y, btn_w, btn_h), 3, border_radius=12)
     btn_text = font_mid.render("Start Game", True, WHITE)
     surface.blit(btn_text, (SCREEN_WIDTH // 2 - btn_text.get_width() // 2, btn_y + (btn_h - btn_text.get_height()) // 2))
 
-    hint_text = font_small.render("Click the button or press ENTER", True, (200, 200, 200))
-    surface.blit(hint_text, (SCREEN_WIDTH // 2 - hint_text.get_width() // 2, 410))
+    hint_text = font_small.render("Click/Tap START  or press ENTER", True, (200, 200, 200))
+    surface.blit(hint_text, (SCREEN_WIDTH // 2 - hint_text.get_width() // 2, 390))
+
+    touch_hint = font_small.render("Mobile: drag finger to move", True, (160, 200, 160))
+    surface.blit(touch_hint, (SCREEN_WIDTH // 2 - touch_hint.get_width() // 2, 425))
 
     return pygame.Rect(btn_x, btn_y, btn_w, btn_h)
 
@@ -225,8 +234,9 @@ def draw_lose_screen(surface, score, font_large, font_mid, font_small):
 
 
 async def main():
-    pygame.mixer.pre_init(44100, -16, 2, 512)
+    pygame.mixer.pre_init(44100, -16, 2, 2048)
     pygame.init()
+    pygame.mixer.set_num_channels(16)
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Taco Eating Game")
@@ -240,6 +250,7 @@ async def main():
     await asyncio.sleep(0)  # yield before image loading
 
     pygame.mixer.music.load(f"{SOUND_PATH}/bg_sound.ogg")
+    pygame.mixer.music.set_volume(0.4)
     pygame.mixer.music.play(-1)
 
     eat_taco_sound  = pygame.mixer.Sound(f"{SOUND_PATH}/eat_taco_sound.ogg")
@@ -248,6 +259,11 @@ async def main():
     powerup_sound   = pygame.mixer.Sound(f"{SOUND_PATH}/power_up_sound.ogg")
     fail_sound      = pygame.mixer.Sound(f"{SOUND_PATH}/fail_sound.ogg")
     win_sound       = pygame.mixer.Sound(f"{SOUND_PATH}/win_sound.ogg")
+
+    eat_taco_sound.set_volume(0.6)
+    eat_snake_sound.set_volume(0.7)
+    boost_sound.set_volume(0.7)
+    powerup_sound.set_volume(0.8)
 
     bg_image = pygame.image.load(f"{ASSET_PATH}/bg_img.png")
     bg_image = pygame.transform.scale(bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -282,7 +298,7 @@ async def main():
     player_group.add(player)
 
     flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-    start_btn_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 310, 260, 60)
+    start_btn_rect = pygame.Rect(SCREEN_WIDTH // 2 - 130, 300, 260, 60)
 
     running = True
     while running:
@@ -291,6 +307,7 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
@@ -298,6 +315,7 @@ async def main():
                     powerup_sound.play()
                     game_state = 'playing'
                     start_ticks = pygame.time.get_ticks()
+                    player.touch_x = None
                 elif event.key == pygame.K_RETURN and game_state in ('win', 'lose'):
                     powerup_sound.play()
                     score, bad_count = 0, 0
@@ -306,13 +324,16 @@ async def main():
                     food_group.empty()
                     player.rect.centerx = SCREEN_WIDTH // 2
                     player.hurt_timer, player.eat_timer = 0, 0
+                    player.touch_x = None
                     game_state = 'playing'
                     start_ticks = pygame.time.get_ticks()
+
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if game_state == 'start' and start_btn_rect.collidepoint(event.pos):
                     powerup_sound.play()
                     game_state = 'playing'
                     start_ticks = pygame.time.get_ticks()
+                    player.touch_x = None
                 elif game_state in ('win', 'lose') and RESTART_BTN_RECT.collidepoint(event.pos):
                     powerup_sound.play()
                     score, bad_count = 0, 0
@@ -321,8 +342,48 @@ async def main():
                     food_group.empty()
                     player.rect.centerx = SCREEN_WIDTH // 2
                     player.hurt_timer, player.eat_timer = 0, 0
+                    player.touch_x = None
                     game_state = 'playing'
                     start_ticks = pygame.time.get_ticks()
+                elif game_state == 'playing':
+                    player.touch_x = event.pos[0]
+
+            elif event.type == pygame.MOUSEMOTION:
+                if event.buttons[0] and game_state == 'playing':
+                    player.touch_x = event.pos[0]
+
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if game_state == 'playing':
+                    player.touch_x = None
+
+            elif event.type == pygame.FINGERDOWN:
+                fx = int(event.x * SCREEN_WIDTH)
+                fy = int(event.y * SCREEN_HEIGHT)
+                if game_state == 'start' and start_btn_rect.collidepoint(fx, fy):
+                    powerup_sound.play()
+                    game_state = 'playing'
+                    start_ticks = pygame.time.get_ticks()
+                    player.touch_x = None
+                elif game_state in ('win', 'lose') and RESTART_BTN_RECT.collidepoint(fx, fy):
+                    powerup_sound.play()
+                    score, bad_count = 0, 0
+                    boost_active, boost_timer, boost_spawn_count = False, 0, 0
+                    warning_timer, lucky_timer, spawn_timer = 0, 0, 0
+                    food_group.empty()
+                    player.rect.centerx = SCREEN_WIDTH // 2
+                    player.hurt_timer, player.eat_timer = 0, 0
+                    player.touch_x = None
+                    game_state = 'playing'
+                    start_ticks = pygame.time.get_ticks()
+                elif game_state == 'playing':
+                    player.touch_x = fx
+
+            elif event.type == pygame.FINGERMOTION:
+                if game_state == 'playing':
+                    player.touch_x = int(event.x * SCREEN_WIDTH)
+
+            elif event.type == pygame.FINGERUP:
+                player.touch_x = None
 
         if game_state == 'start':
             draw_start_screen(screen, font_large, font_mid, font_small, bg_image)
@@ -368,6 +429,7 @@ async def main():
                     elif food.food_type == 'taco':
                         score += food.points
                         player.eat_timer = 12
+                        eat_taco_sound.stop()
                         eat_taco_sound.play()
                     elif food.food_type == 'milkshake':
                         score += food.points
