@@ -28,11 +28,8 @@ async def custom_site():
     platform.window.transfer.hidden = true
     platform.window.canvas.style.visibility = "visible"
 
-
     bundle = "tacoman"
-
-    # the C or js loader could do that but be explicit.
-    appdir = Path(f"/data/data/{bundle}") # /data/data/tacoman
+    appdir = Path(f"/data/data/{bundle}")
     appdir.mkdir()
 
 
@@ -59,17 +56,9 @@ async def custom_site():
 
     main = appdir / "assets" / "main.py"
 
-    # TODO: test for window.webkitAudioContext and block aio loop until gesture if accessing media manager play
-    # before a gesture is recorded ( touch or click )
-
-    # test/wait user media interaction
+    # wait for user media interaction (required before audio can play)
     if not platform.window.MM.UME:
-
-        # now that apk is mounted we have access to font cache
-        # but we need to fill __file__ that is not yet set
         __import__(__name__).__file__ = main
-
-        # now make a prompt
         msg  = "Ready to start ! Please click/touch page"
         platform.window.infobox.innerText = msg
         print("\n"*4, f"    * Waiting for media user engagement. {msg} *" , "\n"*4)
@@ -77,21 +66,14 @@ async def custom_site():
         while not platform.window.MM.UME:
             await asyncio.sleep(.1)
 
-    # start async top level machinery if not started and add a console in any case if requested.
     await TopLevel_async_handler.start_toplevel(platform.shell, console=window.python.config.debug)
 
-    # now that apk is mounted we have access to font cache
-    # but we need to fill __file__/__name__ that are not yet set
     __import__(__name__).__file__ = main
-
 
     def ui_callback(pkg):
         platform.window.infobox.innerText = f"installing {pkg}"
 
     await shell.source(main, callback=ui_callback)
-
-    # if you don't reach that step
-    # your main.py has an infinite sync loop somewhere !
 
     platform.window.infobox.style.display = "none"
     platform.window.config.gui_divider = 1
@@ -137,11 +119,6 @@ asyncio.run( custom_site() )
     {% endif %}
 
 --><script type="application/javascript">
-// END BLOCK
-
-
-
-// this dict is available under PyConfig.config from __main__
 
 config = {
     xtermjs : "1" ,
@@ -161,14 +138,13 @@ config = {
     fb_height : "720"
 }
 
-// 모바일 세로 모드: 9:16 (360x640 — 데스크탑 대비 픽셀 75% 감소)
+// mobile portrait: 360x640 (9:16), 75% fewer pixels than desktop
 window.TACOMAN_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-console.log('[TacoMan] TACOMAN_MOBILE:', window.TACOMAN_MOBILE, '| UA:', navigator.userAgent.substring(0, 80));
+console.log('[TacoMan] mobile=' + window.TACOMAN_MOBILE);
 if (window.TACOMAN_MOBILE) {
     config.fb_width  = "360";
     config.fb_height = "640";
     config.fb_ar     = 9 / 16;
-    console.log('[TacoMan] Mobile config applied: 360x640 (9:16)');
 }
 
 function show_infobox() {
@@ -321,15 +297,6 @@ function show_infobox() {
         .framed          { position: relative; top: 150px; right: 10px; border: none; }
     </style>
 
-    <script>
-/*
-        if (navigator.serviceWorker)
-            navigator.serviceWorker.register("https://pygame-web.github.io/cdn/0.9.3/pygbag0.9.3.js")
-        else
-            console.warn("Service workers not supported")
-*/
-    </script>
-
     <script src="https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js"></script>
 
 </head>
@@ -349,17 +316,15 @@ function show_infobox() {
 
     <script>
         window.game_should_start = false;
-
-        // Override pygbag's show_infobox so the infobox never appears on screen
         window.show_infobox = function() {};
 
-        // Called from main.py after pygame.display.set_mode() - removes the overlay
+        // hide HTML loading screen once pygame canvas is ready
         window.loadingScreen_hide = function() {
             var el = document.getElementById('loading-screen');
             if (el) el.style.display = 'none';
         };
 
-        // Track actual download progress from pygbag's hidden <progress> element
+        // track download progress via pygbag's hidden <progress> element
         var _progressPoll = setInterval(function() {
             var p   = document.getElementById('progress');
             var bar = document.getElementById('loading-bar');
@@ -368,13 +333,11 @@ function show_infobox() {
             var pct = max > 0 ? Math.round((p.value / max) * 100) : 0;
             if (pct > 0) {
                 bar.style.width = pct + '%';
-                bar.style.animationName = 'none';   // stop pulse when real data arrives
+                bar.style.animationName = 'none';
             }
         }, 200);
 
-        // Poll infobox.textContent every 150ms.
-        // Python sets it to "Ready to start !" when archive is loaded and UME is needed.
-        // textContent works even when element is display:none.
+        // show Start button when pygbag signals ready (infobox text check)
         var _poll = setInterval(function() {
             var ib = document.getElementById('infobox');
             if (!ib) return;
@@ -399,11 +362,8 @@ function show_infobox() {
                 btn.innerText = 'Starting...';
                 btn.classList.add('clicked');
             }
-            // click 이벤트만 사용 — touchend 제거.
-            // 모바일에서 touchend 후 합성 click이 자동 발생하며
-            // 이 click이 pygbag의 MM.UME(미디어 참여)를 설정해서 게임이 시작됨.
-            // touchend를 별도 등록하면 MM.UME 설정 전에 game_should_start만
-            // true가 되어 두 번 눌러야 시작되는 버그 발생.
+            // click only: on mobile, tap synthesizes a click after touchend.
+            // That click sets pygbag MM.UME so Python can start.
             btn.addEventListener('click', onStart);
         });
     </script>
@@ -494,17 +454,9 @@ frameborder="1"
             var vw = window.innerWidth;
             var vh = window.innerHeight;
             var isMobile = !!window.TACOMAN_MOBILE;
+            var gameW = isMobile ? 360  : 1280;
+            var gameH = isMobile ? 640  : 720;
 
-            var gameW, gameH;
-            if (isMobile) {
-                // 게임이 360x640 (9:16 세로, 저해상도로 성능 최적화)
-                gameW = 360; gameH = 640;
-            } else {
-                // 게임이 1280x720 (16:9 가로)
-                gameW = 1280; gameH = 720;
-            }
-
-            // 화면에 꽉 차도록 스케일 (비율 유지)
             var scale = Math.min(vw / gameW, vh / gameH);
             var canvasW = Math.round(gameW * scale);
             var canvasH = Math.round(gameH * scale);
@@ -517,7 +469,8 @@ frameborder="1"
             canvas.style.width     = canvasW + 'px';
             canvas.style.height    = canvasH + 'px';
             canvas.style.left      = Math.round((vw - canvasW) / 2) + 'px';
-            canvas.style.top       = Math.round((vh - canvasH) / 2) + 'px';
+            // mobile: align to top so player isn't hidden behind bottom browser bar
+            canvas.style.top       = isMobile ? '0px' : Math.round((vh - canvasH) / 2) + 'px';
             canvas.style.right     = 'auto';
             canvas.style.bottom    = 'auto';
             canvas.style.margin    = '0';
@@ -547,55 +500,35 @@ frameborder="1"
 
     <script type="application/javascript">
 
-    globalThis.__canvas_resized = (self, ecw, ech) => {
-        console.warn("TODO: panda3d canvas monitor", self, ecw, ech)
-    }
+    globalThis.__canvas_resized = (self, ecw, ech) => {}
 
     async function custom_onload(debug_hidden) {
-        console.log(__FILE__, "custom_onload")
         pyconsole.hidden = debug_hidden
         system.hidden = debug_hidden
         transfer.hidden = true
         info.hidden = debug_hidden
         box.hidden = debug_hidden
-        // Start button is handled by the polling script below - do not call show_infobox()
     }
 
-    function custom_prerun(){
-        // no python main and no (MEMFS + VFS) yet.
-        console.log(__FILE__, "custom_prerun")
-
-    }
-
-    function custom_postrun(){
-        // python main and no VFS filesystem yet.
-        console.log(__FILE__, "custom_postrun")
-
-    }
+    function custom_prerun() {}
+    function custom_postrun() {}
 
     function debug() {
-        // allow to gain access to dev tools from js console
-        // but only on desktop. difficult to reach when in iframe
         python.config.debug = true
         custom_onload(false)
         Module.PyRun_SimpleString("shell.uptime()")
         window_resize()
     }
 
-    function info_inline(data){
+    function info_inline(data) {
         document.getElementById("info").innerHTML = data
     }
 
     function info_online(url) {
-        // display info about current APK
-        fetch( url /*, options */)
-            .then((response) => response.text())
-            .then((html) => {
-                info_inline(html);
-        })
-        .catch((error) => {
-            console.warn(error);
-        });
+        fetch(url)
+            .then((r) => r.text())
+            .then((html) => { info_inline(html); })
+            .catch((e) => { console.warn(e); });
     }
 
     function frame_online(url) {
