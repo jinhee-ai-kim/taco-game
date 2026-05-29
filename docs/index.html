@@ -161,6 +161,16 @@ config = {
     fb_height : "720"
 }
 
+// 모바일 세로 모드: 9:16 (360x640 — 데스크탑 대비 픽셀 75% 감소)
+window.TACOMAN_MOBILE = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+console.log('[TacoMan] TACOMAN_MOBILE:', window.TACOMAN_MOBILE, '| UA:', navigator.userAgent.substring(0, 80));
+if (window.TACOMAN_MOBILE) {
+    config.fb_width  = "360";
+    config.fb_height = "640";
+    config.fb_ar     = 9 / 16;
+    console.log('[TacoMan] Mobile config applied: 360x640 (9:16)');
+}
+
 function show_infobox() {
     infobox.style.display = "block";
 
@@ -181,11 +191,31 @@ function show_infobox() {
     <title>tacoman</title>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+    <script>
+        // Clear all browser caches on every page load
+        (function() {
+            if (!('caches' in window)) return;
+            caches.keys().then(function(names) {
+                if (names.length === 0) {
+                    console.log('[TacoMan] No caches found.');
+                    return;
+                }
+                Promise.all(names.map(function(name) {
+                    return caches.delete(name);
+                })).then(function() {
+                    console.log('[TacoMan] Cleared ' + names.length + ' cache(s):', names.join(', '));
+                });
+            });
+        })();
+    </script>
 
     <link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
 
@@ -201,12 +231,18 @@ function show_infobox() {
         #loading-screen {
             position: fixed;
             inset: 0;
-            background: linear-gradient(rgba(0,0,0,0.52),rgba(0,0,0,0.52)), url('bg_img.png') center/cover no-repeat;
+            background: linear-gradient(rgba(0, 0, 0, 0.205),rgba(0,0,0,0.205)), url('bg_img.png') center/cover no-repeat;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 9999;
+        }
+
+        @media (max-width: 768px) {
+            #loading-screen {
+                background: linear-gradient(rgba(0, 0, 0, 0.205),rgba(0,0,0,0.205)), url('bg_mobile_img.png') center/cover no-repeat;
+            }
         }
 
         #loading-title {
@@ -357,15 +393,18 @@ function show_infobox() {
         document.addEventListener('DOMContentLoaded', function() {
             var btn = document.getElementById('start-btn');
             if (!btn) return;
-            function onStart(e) {
+            function onStart() {
                 if (window.game_should_start) return;
-                if (e.type === 'touchend') e.preventDefault();
                 window.game_should_start = true;
                 btn.innerText = 'Starting...';
                 btn.classList.add('clicked');
             }
-            btn.addEventListener('click',    onStart);
-            btn.addEventListener('touchend', onStart);
+            // click 이벤트만 사용 — touchend 제거.
+            // 모바일에서 touchend 후 합성 click이 자동 발생하며
+            // 이 click이 pygbag의 MM.UME(미디어 참여)를 설정해서 게임이 시작됨.
+            // touchend를 별도 등록하면 MM.UME 설정 전에 game_should_start만
+            // true가 되어 두 번 눌러야 시작되는 버그 발생.
+            btn.addEventListener('click', onStart);
         });
     </script>
 
@@ -441,6 +480,70 @@ frameborder="1"
     <div id="pyconsole">
         <div id="terminal" tabIndex=1 align="left"></div>
     </div>
+
+    <script type="application/javascript">
+    // === Canvas Fit Layout ===
+    (function() {
+        var _lock = false;
+
+        function applyLayout() {
+            if (_lock) return;
+            var canvas = document.getElementById('canvas');
+            if (!canvas) return;
+
+            var vw = window.innerWidth;
+            var vh = window.innerHeight;
+            var isMobile = !!window.TACOMAN_MOBILE;
+
+            var gameW, gameH;
+            if (isMobile) {
+                // 게임이 360x640 (9:16 세로, 저해상도로 성능 최적화)
+                gameW = 360; gameH = 640;
+            } else {
+                // 게임이 1280x720 (16:9 가로)
+                gameW = 1280; gameH = 720;
+            }
+
+            // 화면에 꽉 차도록 스케일 (비율 유지)
+            var scale = Math.min(vw / gameW, vh / gameH);
+            var canvasW = Math.round(gameW * scale);
+            var canvasH = Math.round(gameH * scale);
+
+            console.log('[TacoMan] layout | vw=' + vw + ' vh=' + vh + ' mobile=' + isMobile
+                + ' | canvas=' + canvasW + 'x' + canvasH + ' scale=' + scale.toFixed(3));
+
+            _lock = true;
+            canvas.style.position  = 'absolute';
+            canvas.style.width     = canvasW + 'px';
+            canvas.style.height    = canvasH + 'px';
+            canvas.style.left      = Math.round((vw - canvasW) / 2) + 'px';
+            canvas.style.top       = Math.round((vh - canvasH) / 2) + 'px';
+            canvas.style.right     = 'auto';
+            canvas.style.bottom    = 'auto';
+            canvas.style.margin    = '0';
+            canvas.style.transform = '';
+            _lock = false;
+        }
+
+        function attachObserver() {
+            var canvas = document.getElementById('canvas');
+            if (!canvas) return;
+            new MutationObserver(function() {
+                if (!_lock) applyLayout();
+            }).observe(canvas, { attributes: true, attributeFilter: ['style', 'width', 'height'] });
+        }
+
+        window.addEventListener('resize', applyLayout);
+        window.addEventListener('orientationchange', function() { setTimeout(applyLayout, 300); });
+        document.addEventListener('DOMContentLoaded', function() {
+            applyLayout();
+            attachObserver();
+        });
+        [200, 500, 1000, 2000, 3000, 5000].forEach(function(t) {
+            setTimeout(applyLayout, t);
+        });
+    })();
+    </script>
 
     <script type="application/javascript">
 

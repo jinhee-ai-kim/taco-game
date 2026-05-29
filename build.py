@@ -16,8 +16,9 @@ result = subprocess.run([sys.executable, "-m", "pygbag", "--build", "."])
 if result.returncode != 0:
     sys.exit(result.returncode)
 
-# 3. bg_img.png must be in build/web/ so python -m pygbag . can serve it
-shutil.copy(ROOT / "docs" / "bg_img.png", ROOT / "build" / "web" / "bg_img.png")
+# 3. background images must be in build/web/ so python -m pygbag . can serve them
+shutil.copy(ROOT / "docs" / "bg_img.png",        ROOT / "build" / "web" / "bg_img.png")
+shutil.copy(ROOT / "docs" / "bg_mobile_img.png", ROOT / "build" / "web" / "bg_mobile_img.png")
 
 # 4. Update docs/ archives for GitHub Pages deployment
 shutil.copy(ROOT / "build" / "web" / "tacoman.apk",   ROOT / "docs" / "tacoman.apk")
