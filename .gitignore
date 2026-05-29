@@ -8,8 +8,8 @@ env/
 venv/
 .env
 
-# Build cache (not needed in repo)
-build/web-cache/
+# Build output 
+build/
 
 # IDE
 .vscode/

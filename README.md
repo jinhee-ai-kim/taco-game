@@ -26,13 +26,20 @@ Catch falling tacos, dodge snakes and spiders, and rack up 1000 points to win!
 
 ## Run Locally
 
-### Requirements
+### Desktop (pygame window)
 
-- Python 3.12
-- pygame 2.6+
+**Requirements:** Python 3.12, pygame 2.6+
 
 ```bash
 pip install pygame
+python main.py
+```
+
+### Browser (test the web build locally)
+
+```bash
+python build.py        # build + inject custom loading screen
+python -m pygbag .     # serve at http://localhost:8000
 ```
 
 ### Start the game

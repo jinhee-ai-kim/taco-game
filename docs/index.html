@@ -23,7 +23,7 @@ from pathlib import Path
 # do not rename
 async def custom_site():
     import embed
-    platform.document.body.style.background = "#7f7f7f"
+    # platform.document.body.style.background = "#7f7f7f"
 
     platform.window.transfer.hidden = true
     platform.window.canvas.style.visibility = "visible"
@@ -190,89 +190,99 @@ function show_infobox() {
     <link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
 
     <style>
-        #status {
-            display: inline-block;
-            vertical-align: top;
-            margin-top: 20px;
-            margin-left: 30px;
-            font-weight: bold;
-            color: rgb(120, 120, 120);
-        }
-
-        #progress {
-            height: 20px;
-            width: 300px;
-        }
-
-        #infobox {
-            position: fixed; /* center relative to viewport */
-            background: green;
-            color: blue;
-            font-weight: bold;
-            padding: 12px 24px;
- /*           display: none; */
-            z-index: 999999;
-        }
-        div.emscripten { text-align: center; }
-        div.emscripten_border { border: 1px solid black; }
-        div.thick_border { border: 4px solid black; }
-
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        /* average size of droid screen 470dp x 320dp  */
-        canvas.emscripten {
-            border: 0px none;
-            background-color: transparent;
-            width: 100%;
-            height: 100%;
-            z-index: 5;
-
-            padding: 0;
-            margin: 0 auto;
-
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-        }
+        * { box-sizing: border-box; }
 
         body {
-            font-family: arial;
-            margin: 0;
-            padding: none;
-            background-color:powderblue;
+            margin: 0; padding: 0; overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #7f7f7f;
         }
 
-        .topright{
-           position:absolute;
-           top:0px;
-           right:0px;
-        }
-
-        .bottomright {
-            position:absolute;
-            top: 40%;
-            right: 0px;
-        }
-
-        .center {
+        #loading-screen {
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(rgba(0,0,0,0.52),rgba(0,0,0,0.52)), url('bg_img.png') center/cover no-repeat;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            z-index: 9999;
         }
 
-        .trinfo{
-           position: relative;
-           right: 0px;
-           border: 1px solid black;
+        #loading-title {
+            font-size: clamp(2rem, 6vw, 3rem);
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            letter-spacing: 3px;
+            margin-bottom: 32px;
         }
 
-        .framed{
-           position: relative;
-           top: 150px;
-           right: 10px;
-           border: 1px solid black;
+        #loading-bar-wrap {
+            width: min(280px, 70vw);
+            height: 10px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 10px;
         }
+
+        #loading-bar {
+            height: 100%;
+            width: 5%;
+            background: linear-gradient(90deg, #22c55e, #ffd700);
+            border-radius: 8px;
+            transition: width 0.4s ease;
+            animation: barpulse 1.4s ease-in-out infinite;
+        }
+
+        @keyframes barpulse {
+            0%,100% { opacity: 0.6; }
+            50%      { opacity: 1; }
+        }
+
+        #loading-status {
+            font-size: 0.82rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 32px;
+        }
+
+        #start-btn {
+            display: none;
+            background: #22863a;
+            color: #fff;
+            font-size: clamp(1rem, 4vw, 1.3rem);
+            font-weight: bold;
+            padding: 16px 52px;
+            border: 3px solid #fff;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            letter-spacing: 1px;
+            transition: transform 0.1s, background 0.1s;
+            user-select: none;
+        }
+        #start-btn:hover  { background: #2ea043; transform: scale(1.03); }
+        #start-btn:active { transform: scale(0.97); }
+        #start-btn.clicked { background: #555; cursor: default; transform: none; }
+
+        canvas.emscripten {
+            border: 0; background: transparent;
+            width: 100%; height: 100%; z-index: 5;
+            padding: 0; margin: 0 auto;
+            position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+        }
+
+        #infobox         { display: none; }
+        #progress        { display: none; }
+        div.emscripten   { text-align: center; }
+        div.emscripten_border { border: none; }
+        div.thick_border { border: none; }
+        .topright        { position: absolute; top: 0; right: 0; }
+        .bottomright     { position: absolute; top: 40%; right: 0; }
+        .center          { display: flex; align-items: center; justify-content: center; }
+        .trinfo          { position: relative; right: 0; border: none; }
+        .framed          { position: relative; top: 150px; right: 10px; border: none; }
     </style>
 
     <script>
@@ -290,13 +300,74 @@ function show_infobox() {
 
 <body>
 
-    <div id="transfer" align=center>
-<!--        <div class="spinner" id='spinner'></div> -->
-        <div class="emscripten" id="status">Downloading...</div>
-        <div class="emscripten">
-            <progress value="0" max="100" id="progress"></progress>
-        </div>
+    <div id="loading-screen">
+        <div id="loading-title">Tacoman Game</div>
+        <div id="loading-bar-wrap"><div id="loading-bar"></div></div>
+        <div id="loading-status">Loading...</div>
+        <div id="start-btn">Start Game</div>
     </div>
+
+    <div id="transfer" align=center hidden>
+        <progress value="0" max="100" id="progress"></progress>
+    </div>
+
+    <script>
+        window.game_should_start = false;
+
+        // Override pygbag's show_infobox so the infobox never appears on screen
+        window.show_infobox = function() {};
+
+        // Called from main.py after pygame.display.set_mode() - removes the overlay
+        window.loadingScreen_hide = function() {
+            var el = document.getElementById('loading-screen');
+            if (el) el.style.display = 'none';
+        };
+
+        // Track actual download progress from pygbag's hidden <progress> element
+        var _progressPoll = setInterval(function() {
+            var p   = document.getElementById('progress');
+            var bar = document.getElementById('loading-bar');
+            if (!p || !bar) return;
+            var max = p.max || 100;
+            var pct = max > 0 ? Math.round((p.value / max) * 100) : 0;
+            if (pct > 0) {
+                bar.style.width = pct + '%';
+                bar.style.animationName = 'none';   // stop pulse when real data arrives
+            }
+        }, 200);
+
+        // Poll infobox.textContent every 150ms.
+        // Python sets it to "Ready to start !" when archive is loaded and UME is needed.
+        // textContent works even when element is display:none.
+        var _poll = setInterval(function() {
+            var ib = document.getElementById('infobox');
+            if (!ib) return;
+            var txt = ib.textContent || '';
+            if (txt.indexOf('Ready') < 0 && txt.indexOf('click') < 0 && txt.indexOf('touch') < 0) return;
+            clearInterval(_poll);
+            clearInterval(_progressPoll);
+            var bw  = document.getElementById('loading-bar-wrap');
+            var st  = document.getElementById('loading-status');
+            var btn = document.getElementById('start-btn');
+            if (bw)  bw.style.display  = 'none';
+            if (st)  st.style.display  = 'none';
+            if (btn) btn.style.display = 'block';
+        }, 150);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('start-btn');
+            if (!btn) return;
+            function onStart(e) {
+                if (window.game_should_start) return;
+                if (e.type === 'touchend') e.preventDefault();
+                window.game_should_start = true;
+                btn.innerText = 'Starting...';
+                btn.classList.add('clicked');
+            }
+            btn.addEventListener('click',    onStart);
+            btn.addEventListener('touchend', onStart);
+        });
+    </script>
 
 
 
@@ -378,17 +449,13 @@ frameborder="1"
     }
 
     async function custom_onload(debug_hidden) {
-        // this is called before anything python is loaded
-        // make your js customization here
         console.log(__FILE__, "custom_onload")
-
         pyconsole.hidden = debug_hidden
         system.hidden = debug_hidden
-        transfer.hidden = debug_hidden
+        transfer.hidden = true
         info.hidden = debug_hidden
-        box.hidden =  debug_hidden
-
-        show_infobox()
+        box.hidden = debug_hidden
+        // Start button is handled by the polling script below - do not call show_infobox()
     }
 
     function custom_prerun(){
